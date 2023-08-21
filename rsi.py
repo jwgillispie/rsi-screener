@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore")
 
 #  get the data
 def getData(sector_list):
-    stocks = pd.read_csv("./nasdaq_screener.csv")
+    stocks = pd.read_csv(r".\rsi-screener\nasdaq_screener.csv")
     stocks = stocks.sort_values("Market Cap", ascending= False)
     stocks = stocks.loc[stocks["Sector"].isin(sector_list)]
     stocks = stocks.sort_values("Market Cap", ascending=False)
@@ -158,8 +158,8 @@ def run():
     })
     print(resp.json())
 # schedule.every().saturday.at("22:48", "America/New_York").do(run)
-schedule.every().sunday.at("23:00", "America/New_York").do(run)
-schedule.every().wednesday.at("10:00", "America/New_York").do(run)
+schedule.every().tuesday.at("09:15:00", "America/New_York").do(run)
+schedule.every().wednesday.at("10:30:00", "America/New_York").do(run)
 
 while True:
     schedule.run_pending()
