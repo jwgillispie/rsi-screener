@@ -409,6 +409,57 @@ def generate_trading_signals():
         print(overbought_stocks.to_string(index=False))
     
     return oversold_stocks
+def parameter_sensitivity_analysis(all_results, parameter_ranges):
+    """
+    Simulate strategy performance over a range of parameter values.
+    
+    Parameters:
+    - all_results: List of backtest results dictionaries
+    - parameter_ranges: Dictionary of parameter names and ranges to test
+      Example: {'rsi_period': range(10, 21, 2), 
+                'profit_target_pct': [10, 12, 15, 20]}
+    
+    Returns:
+    - DataFrame of performance metrics for each parameter combination
+    """
+    import pandas as pd
+    import itertools
+    
+    # Get the cross product of all parameter ranges
+    param_combinations = list(itertools.product(*parameter_ranges.values()))
+    
+    # Create DataFrame to store results
+    columns = list(parameter_ranges.keys()) + ['Total_Return_Pct', 'Sharpe_Ratio', 
+                                               'Win_Rate', 'Profit_Factor', 
+                                               'Max_Drawdown_Pct', 'Num_Trades']
+    results_df = pd.DataFrame(columns=columns)
+    
+    # Iterate over each parameter combination
+    for combo in param_combinations:
+        param_set = dict(zip(parameter_ranges.keys(), combo))
+        
+        # Filter backtest results to only those with matching parameters
+        filtered_results = [r for r in all_results if all(r['params'][p] == v for p, v in param_set.items())]
+        
+        if filtered_results:
+            # Aggregate performance metrics across matching results
+            total_return = sum([r['Total Return (%)'] for r in filtered_results]) / 100
+            sharpe_ratio = sum([r['Sharpe Ratio'] for r in filtered_results]) / len(filtered_results)
+            win_rate = sum([r['Win Rate (%)'] for r in filtered_results]) / len(filtered_results) / 100
+            
+            total_profits = sum([sum(t['P/L'] for t in r['Trades'] if t['P/L'] > 0) for r in filtered_results])
+            total_losses = sum([sum(t['P/L'] for t in r['Trades'] if t['P/L'] <= 0) for r in filtered_results])
+            profit_factor = total_profits / abs(total_losses) if total_losses != 0 else float('inf')
+            
+            max_drawdown = max([r['Max Drawdown (%)'] for r in filtered_results]) / 100
+            num_trades = sum([r['Number of Trades'] for r in filtered_results])
+            
+            # Store results
+            result_row = list(combo) + [total_return, sharpe_ratio, win_rate, 
+                                        profit_factor, max_drawdown, num_trades]
+            results_df.loc[len(results_df)] = result_row
+        
+    return results_df
 def analyze_backtest_performance_by_market_condition(all_results, all_portfolio_dfs, market_benchmark='SPY'):
     """
     Analyze how the strategy performs in different market conditions
@@ -1546,7 +1597,8 @@ def enhanced_main():
                               f"with {best_rsi_bucket['Win_Rate']:.2f}% win rate")
                 else:
                     print("Could not complete parameter sensitivity analysis.")
-            
+            # elif choice == '7':
+            #     # parameter_sensitivity_analysis()
             elif analysis_choice == '7':
                 # Return to main menu
                 continue
