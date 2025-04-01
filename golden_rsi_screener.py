@@ -6,19 +6,32 @@ import matplotlib.pyplot as plt
 import random
 
 def calculate_rsi(data, periods=14):
+    """
+    Calculate RSI values for a price series.
+    
+    Parameters:
+    data (pandas.Series): Close price series
+    periods (int): RSI calculation period
+    
+    Returns:
+    pandas.Series: RSI values
+    """
     delta = data.diff()
-    delta = delta[1:]
+    delta = delta[1:]  # Remove the first NaN
+    
     gains = delta.copy()
     losses = delta.copy()
     gains[gains < 0] = 0
     losses[losses > 0] = 0
     losses = abs(losses)
+    
     avg_gains = gains.rolling(window=periods).mean()
     avg_losses = losses.rolling(window=periods).mean()
+    
     rs = avg_gains / avg_losses
     rsi = 100 - (100 / (1 + rs))
+    
     return rsi
-
 def get_sp500_tickers():
     try:
         url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
@@ -323,6 +336,364 @@ def backtest_rsi_strategy(ticker, start_date, end_date, portfolio_size=1000000, 
     except Exception as e:
         print(f"Error in backtesting {ticker}: {str(e)}")
         return None, None
+
+
+
+def backtest_rsi_strategy_fixed(ticker, start_date, end_date, portfolio_size=1000000, risk_per_trade=0.01, 
+                         rsi_period=14, overbought_threshold=70, oversold_threshold=30,
+                         target_profit_pct=15, max_loss_pct=7, timeout_days=20):
+    """
+    Backtest RSI strategy with look-ahead bias fixed.
+    
+    This version ensures we only use information that would have been available
+    at the time of each trading decision.
+    """
+    try:
+        # Download data with extra padding for RSI calculation to avoid look-ahead bias
+        padding_days = rsi_period * 2  # Add extra days at the beginning for RSI calculation
+        padded_start = start_date - timedelta(days=padding_days + 30)  # Add 30 days extra to ensure enough trading days
+        
+        data = yf.download(ticker, start=padded_start, end=end_date, progress=False)
+        if data.empty:
+            raise ValueError(f"No data available for {ticker}")
+        
+        # Calculate RSI on the full dataset
+        data['RSI'] = calculate_rsi(data['Close'], periods=rsi_period)
+        
+        # Trim the data to the actual backtest period for the simulation
+        backtest_data = data[data.index >= start_date].copy()
+        
+        # This ensures we don't use future data, but we have pre-calculated RSI values
+        # for the start of our actual testing period
+        
+        # Initialize tracking variables
+        position = 0
+        cash = float(portfolio_size)
+        trades = []
+        portfolio_values = []
+        shares_held = 0
+        entry_index = None
+        exit_reasons = []
+        
+        # Process each day
+        for i in range(len(backtest_data)):
+            # Fix the FutureWarning by using .iloc[0] for scalar access
+            current_price = backtest_data['Close'].iloc[i]
+            if isinstance(current_price, pd.Series):
+                current_price = current_price.iloc[0]
+            current_price = float(current_price)
+            
+            current_rsi = backtest_data['RSI'].iloc[i]
+            if isinstance(current_rsi, pd.Series):
+                current_rsi = current_rsi.iloc[0]
+            if np.isnan(current_rsi):
+                continue
+            current_rsi = float(current_rsi)
+                    
+            date = backtest_data.index[i]
+            
+            # Generate signals - ONLY LONG ENTRIES FOR OVERSOLD CONDITIONS
+            signal = 0
+            if current_rsi < oversold_threshold:
+                signal = 1  # Buy signal
+            elif current_rsi > overbought_threshold:
+                signal = -1  # Sell signal (exit only)
+            
+            # Process buy signal
+            if signal == 1 and position == 0:
+                risk_amount = portfolio_size * risk_per_trade
+                stop_loss = current_price * (1 - (max_loss_pct / 100))
+                shares_to_buy = int(risk_amount / (current_price - stop_loss))
+                cost = shares_to_buy * current_price
+                
+                if cost <= cash:
+                    cash -= cost
+                    shares_held = shares_to_buy
+                    position = 1
+                    entry_index = i
+                    
+                    trades.append({
+                        'Ticker': ticker,
+                        'Entry Date': date,
+                        'Entry Price': current_price,
+                        'Shares': shares_held,
+                        'RSI at Entry': current_rsi,
+                        'Exit Date': None,
+                        'Exit Price': None,
+                        'P/L': None,
+                        'Exit Reason': None,
+                        'Days Held': None
+                    })
+            
+            # Check exit conditions if in a position
+            elif position == 1:
+                # Calculate current gain/loss percentage
+                current_gain_pct = ((current_price / trades[-1]['Entry Price']) - 1) * 100
+                days_in_trade = i - entry_index
+                exit_reason = None
+                
+                # Check exit conditions in order of priority
+                if current_rsi > overbought_threshold:
+                    exit_reason = "RSI Overbought"
+                elif current_gain_pct >= target_profit_pct:
+                    exit_reason = "Target Profit"
+                elif current_gain_pct <= -max_loss_pct:
+                    exit_reason = "Stop Loss"
+                elif days_in_trade >= timeout_days:
+                    exit_reason = "Time Exit"
+                
+                if exit_reason:
+                    # Execute exit
+                    proceeds = shares_held * current_price
+                    cash += proceeds
+                    pnl = proceeds - (trades[-1]['Entry Price'] * shares_held)
+                    
+                    exit_reasons.append(exit_reason)
+                    
+                    trades[-1].update({
+                        'Exit Date': date,
+                        'Exit Price': current_price,
+                        'P/L': pnl,
+                        'Exit Reason': exit_reason,
+                        'Days Held': days_in_trade
+                    })
+                    
+                    position = 0
+                    shares_held = 0
+                    entry_index = None
+            
+            # Track portfolio value
+            portfolio_value = cash + (shares_held * current_price)
+            portfolio_values.append({
+                'Date': date,
+                'Portfolio Value': portfolio_value,
+                'Cash': cash,
+                'Shares Held': shares_held
+            })
+        
+        # If we still have an open position at the end of the backtest, close it
+        if position == 1:
+            final_price = backtest_data['Close'].iloc[-1]
+            if isinstance(final_price, pd.Series):
+                final_price = final_price.iloc[0]
+            final_price = float(final_price)
+            
+            proceeds = shares_held * final_price
+            cash += proceeds
+            pnl = proceeds - (trades[-1]['Entry Price'] * shares_held)
+            days_in_trade = len(backtest_data) - 1 - entry_index
+            
+            trades[-1].update({
+                'Exit Date': backtest_data.index[-1],
+                'Exit Price': final_price,
+                'P/L': pnl,
+                'Exit Reason': 'End of Backtest',
+                'Days Held': days_in_trade
+            })
+            
+            exit_reasons.append('End of Backtest')
+        
+        # Convert portfolio values to DataFrame
+        portfolio_df = pd.DataFrame(portfolio_values)
+        if portfolio_df.empty:
+            return None, None
+            
+        portfolio_df.set_index('Date', inplace=True)
+        
+        # Calculate performance metrics
+        total_days = (end_date - start_date).days
+        total_return = (portfolio_df['Portfolio Value'].iloc[-1] / portfolio_size) - 1
+        annualized_return = (1 + total_return) ** (365 / total_days) - 1
+        
+        daily_returns = portfolio_df['Portfolio Value'].pct_change().dropna()
+        sharpe_ratio = np.sqrt(252) * (daily_returns.mean() / daily_returns.std()) if len(daily_returns) > 0 and daily_returns.std() != 0 else 0
+        
+        cummax = portfolio_df['Portfolio Value'].cummax()
+        drawdowns = (cummax - portfolio_df['Portfolio Value']) / cummax
+        max_drawdown = drawdowns.max()
+        
+        # Calculate win/loss stats
+        completed_trades = [t for t in trades if t['Exit Date'] is not None]
+        winning_trades = [t for t in completed_trades if t['P/L'] > 0]
+        losing_trades = [t for t in completed_trades if t['P/L'] <= 0]
+        
+        win_rate = len(winning_trades) / len(completed_trades) if completed_trades else 0
+        avg_win = np.mean([t['P/L'] for t in winning_trades]) if winning_trades else 0
+        avg_loss = np.mean([t['P/L'] for t in losing_trades]) if losing_trades else 0
+        profit_factor = abs(sum(t['P/L'] for t in winning_trades) / sum(t['P/L'] for t in losing_trades)) if losing_trades and sum(t['P/L'] for t in losing_trades) != 0 else float('inf')
+        
+        # Exit reason statistics
+        exit_reason_counts = {reason: exit_reasons.count(reason) for reason in set(exit_reasons)}
+        
+        # Average holding period
+        avg_days_held = np.mean([t['Days Held'] for t in completed_trades]) if completed_trades else 0
+        
+        results = {
+            'Ticker': ticker,
+            'Total Return (%)': round(total_return * 100, 2),
+            'Annualized Return (%)': round(annualized_return * 100, 2),
+            'Sharpe Ratio': round(sharpe_ratio, 2),
+            'Max Drawdown (%)': round(max_drawdown * 100, 2),
+            'Number of Trades': len(completed_trades),
+            'Win Rate (%)': round(win_rate * 100, 2),
+            'Average Win ($)': round(avg_win, 2),
+            'Average Loss ($)': round(avg_loss, 2),
+            'Profit Factor': round(profit_factor, 2),
+            'Average Days Held': round(avg_days_held, 2),
+            'Exit Reasons': exit_reason_counts,
+            'Trades': trades
+        }
+        
+        return results, portfolio_df
+        
+    except Exception as e:
+        print(f"Error in backtesting {ticker}: {str(e)}")
+        return None, None
+
+
+def run_batch_comparison(tickers, start_date, end_date, original_backtest_function):
+    """
+    Run comparison tests on multiple tickers
+    """
+    results = []
+    
+    for ticker in tickers:
+        result = compare_original_vs_fixed(ticker, start_date, end_date, original_backtest_function)
+        if result:
+            results.append(result)
+    
+    # Calculate aggregate statistics
+    if results:
+        original_returns = [r['original']['Total Return (%)'] for r in results]
+        fixed_returns = [r['fixed']['Total Return (%)'] for r in results]
+        
+        avg_original = np.mean(original_returns)
+        avg_fixed = np.mean(fixed_returns)
+        
+        original_win_rates = [r['original']['Win Rate (%)'] for r in results]
+        fixed_win_rates = [r['fixed']['Win Rate (%)'] for r in results]
+        
+        avg_original_wr = np.mean(original_win_rates)
+        avg_fixed_wr = np.mean(fixed_win_rates)
+        
+        print("\n" + "=" * 70)
+        print("BATCH COMPARISON SUMMARY")
+        print("=" * 70)
+        print(f"Number of tickers tested: {len(results)}")
+        print(f"Average Return (Original): {avg_original:.2f}%")
+        print(f"Average Return (Fixed): {avg_fixed:.2f}%")
+        print(f"Performance difference: {avg_fixed - avg_original:.2f}%")
+        print(f"Average Win Rate (Original): {avg_original_wr:.2f}%")
+        print(f"Average Win Rate (Fixed): {avg_fixed_wr:.2f}%")
+        
+        # Show biggest differences
+        differences = [(r['original']['Total Return (%)'] - r['fixed']['Total Return (%)'], r['original']['Ticker']) for r in results]
+        biggest_diffs = sorted(differences, key=lambda x: abs(x[0]), reverse=True)[:5]
+        
+        print("\nBiggest Return Differences (Original - Fixed):")
+        for diff, ticker in biggest_diffs:
+            print(f"  {ticker}: {diff:.2f}%")
+            
+        return results
+    
+    return None
+def compare_original_vs_fixed(ticker, start_date, end_date, original_backtest_function):
+    """
+    Compare results between original backtest and fixed version
+    """
+    print(f"Comparing original vs. look-ahead bias fixed backtest for {ticker}")
+    
+    # Run original backtest
+    original_results, original_df = original_backtest_function(
+        ticker, start_date, end_date,
+        portfolio_size=1000000,
+        risk_per_trade=0.01,
+        rsi_period=14,
+        overbought_threshold=70,
+        oversold_threshold=30,
+        target_profit_pct=15,
+        max_loss_pct=7,
+        timeout_days=20
+    )
+    
+    # Run fixed backtest
+    fixed_results, fixed_df = backtest_rsi_strategy_fixed(
+        ticker, start_date, end_date,
+        portfolio_size=1000000,
+        risk_per_trade=0.01,
+        rsi_period=14,
+        overbought_threshold=70,
+        oversold_threshold=30,
+        target_profit_pct=15,
+        max_loss_pct=7,
+        timeout_days=20
+    )
+    
+    if original_results is None or fixed_results is None:
+        print("Could not compare results - one or both backtests failed")
+        return None
+    
+    # Compare key metrics
+    print("\nComparison of Key Metrics:")
+    print(f"{'Metric':<25} {'Original':<15} {'Fixed':<15} {'Difference':<15} {'% Change':<15}")
+    print("-" * 75)
+    
+    metrics_to_compare = [
+        'Total Return (%)', 
+        'Sharpe Ratio', 
+        'Max Drawdown (%)', 
+        'Number of Trades',
+        'Win Rate (%)',
+        'Profit Factor'
+    ]
+    
+    for metric in metrics_to_compare:
+        orig_val = original_results[metric]
+        fixed_val = fixed_results[metric]
+        diff = fixed_val - orig_val
+        pct_change = (diff / orig_val) * 100 if orig_val != 0 else float('inf')
+        
+        print(f"{metric:<25} {orig_val:<15.2f} {fixed_val:<15.2f} {diff:<15.2f} {pct_change:<15.2f}%")
+    
+    # Compare trades
+    orig_trades = len(original_results['Trades'])
+    fixed_trades = len(fixed_results['Trades'])
+    
+    print(f"\nOriginal backtest trades: {orig_trades}")
+    print(f"Fixed backtest trades: {fixed_trades}")
+    print(f"Trade count difference: {fixed_trades - orig_trades}")
+    
+    # Compare exit reasons
+    print("\nExit Reason Comparison:")
+    all_reasons = set(list(original_results['Exit Reasons'].keys()) + list(fixed_results['Exit Reasons'].keys()))
+    
+    for reason in sorted(all_reasons):
+        orig_count = original_results['Exit Reasons'].get(reason, 0)
+        fixed_count = fixed_results['Exit Reasons'].get(reason, 0)
+        diff = fixed_count - orig_count
+        
+        print(f"{reason:<20}: Original: {orig_count}, Fixed: {fixed_count}, Difference: {diff}")
+    
+    # Create comparison plot if DataFrames are available
+    if original_df is not None and fixed_df is not None and not original_df.empty and not fixed_df.empty:
+        plt.figure(figsize=(12, 6))
+        plt.plot(original_df.index, original_df['Portfolio Value'], label='Original')
+        plt.plot(fixed_df.index, fixed_df['Portfolio Value'], label='Fixed')
+        plt.title(f'Portfolio Value Comparison - {ticker}')
+        plt.xlabel('Date')
+        plt.ylabel('Value ($)')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(f'{ticker}_comparison.png')
+        plt.close()
+        
+        print(f"\nPortfolio comparison chart saved as '{ticker}_comparison.png'")
+    
+    return {
+        'original': original_results,
+        'fixed': fixed_results
+    }
 
 def analyze_exit_strategies(all_results):
     """Analyze the effectiveness of different exit strategies"""
