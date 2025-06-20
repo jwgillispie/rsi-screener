@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="rsi_trading",
-    version="0.1.0",
+    name="iron_condor",
+    version="1.0.0",
     packages=find_packages(),
     install_requires=[
         "pandas>=2.0.0",
@@ -22,12 +22,12 @@ setup(
     ],
     author="Your Name",
     author_email="your.email@example.com",
-    description="RSI-based trading strategy with backtesting and analysis",
-    keywords="trading, finance, rsi, technical analysis, backtesting",
+    description="Iron condor options strategy with backtesting and analysis",
+    keywords="trading, finance, options, iron condor, technical analysis, backtesting",
     python_requires=">=3.8",
     entry_points={
         "console_scripts": [
-            "rsi-trader=rsi_trading.main:main",
+            "iron-condor=iron_condor.main:main",
         ],
     },
 )
