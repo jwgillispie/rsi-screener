@@ -1,122 +1,139 @@
-# Iron Condor Options Strategy
+# Iron Condor Trading Platform
 
-A comprehensive iron condor options trading strategy with backtesting, analysis, and signal generation capabilities. Converted from RSI-based stock trading to sophisticated options strategies.
+A comprehensive trading platform for iron condor options strategies, featuring a Python API backend and Flutter mobile/desktop app.
 
-**DISCLAIMER: This is for educational and demonstration purposes only. This repository contains no financial or investing advice. Do not use this code or any information from this repository to make actual trades.**
+## 🏗️ Project Structure
 
-## Quick Start
-
-### 1. Easy Installation
-```bash
-# Clone the repository
-git clone <repository-url>
-cd rsi-screener
-
-# Run the installer
-./install.sh
+```
+rsi-screener/
+├── backend/                    # Python API Backend
+│   ├── api/                   # FastAPI web server
+│   │   └── api_server.py      # Main API endpoints
+│   ├── core/                  # Core trading logic
+│   │   ├── screener.py        # Stock screening
+│   │   ├── strategy.py        # Trading strategies
+│   │   ├── options.py         # Options pricing
+│   │   ├── backtest.py        # Backtesting engine
+│   │   ├── api_screener.py    # API-specific screener
+│   │   ├── main.py            # CLI interface
+│   │   ├── visualization.py   # Charts and plots
+│   │   └── analysis/          # Advanced analysis modules
+│   ├── config/                # Configuration files
+│   │   └── config.ini         # Strategy parameters
+│   ├── data/                  # Data storage
+│   │   ├── backtest_results/  # Historical test results
+│   │   └── sp500_tickers_cache.csv
+│   ├── scripts/               # Utility scripts
+│   │   ├── main.py            # Main CLI entry point
+│   │   └── iron_condor_tool.py # Command-line tool
+│   ├── tests/                 # Test files
+│   ├── requirements.txt       # Python dependencies
+│   └── setup.py              # Package setup
+├── frontend/                  # Flutter Mobile/Desktop App
+│   ├── lib/
+│   │   ├── models/           # Data models
+│   │   ├── providers/        # State management
+│   │   ├── screens/          # App screens
+│   │   ├── services/         # API communication
+│   │   └── widgets/          # UI components
+│   ├── android/              # Android-specific files
+│   ├── ios/                  # iOS-specific files
+│   ├── macos/                # macOS-specific files
+│   ├── web/                  # Web-specific files
+│   ├── windows/              # Windows-specific files
+│   └── pubspec.yaml          # Flutter dependencies
+├── scripts/                   # Startup scripts
+│   ├── start_backend.sh      # Start Python API
+│   ├── start_frontend.sh     # Start Flutter app
+│   └── demo_setup.sh         # Full setup script
+└── docs/                     # Documentation
+    ├── README.md             # Main documentation
+    ├── API_README.md         # API documentation
+    └── FLUTTER_README.md     # Flutter app guide
 ```
 
-### 2. Generate Current Iron Condor Signals
-```bash
-# Using the direct tool
-./iron_condor_tool.py signals
+## 🚀 Quick Start
 
-# Or using Python main
-python main.py signals
+### Option 1: Use Startup Scripts (Recommended)
+
+```bash
+# Start the backend API server
+./scripts/start_backend.sh
+
+# In another terminal, start the Flutter app
+./scripts/start_frontend.sh
 ```
 
-### 3. Run Iron Condor Backtest
-```bash
-# Using the direct tool
-./iron_condor_tool.py backtest
+### Option 2: Manual Setup
 
-# Or using Python main
-python main.py backtest
+#### Backend API Server
+```bash
+cd backend/api
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r ../requirements.txt
+python api_server.py
 ```
 
-### 4. Interactive Mode
+#### Flutter Frontend
 ```bash
-# Using the direct tool
-./iron_condor_tool.py interactive
-
-# Or using Python main
-python main.py interactive
+cd frontend
+flutter pub get
+flutter packages pub run build_runner build
+flutter run
 ```
 
-## Iron Condor Strategy Overview
+## 📱 Features
 
-**Iron Condor** is a neutral options strategy that profits from low volatility and time decay. The strategy involves:
+### 🗞️ **Trading Newspaper App**
+- **Daily Headlines**: Market-based headlines about iron condor opportunities
+- **Signal Analysis**: Confidence-scored trading opportunities (0-100)
+- **Market Conditions**: Real-time volatility and market analysis
+- **Historical Performance**: Backtest results and top performers
 
-1. **Selling a put spread** (sell higher strike put, buy lower strike put)
-2. **Selling a call spread** (sell lower strike call, buy higher strike call)
-3. **Collecting premium** upfront and profiting if the stock stays between the short strikes
+### 🔧 **Python API Backend**
+- **FastAPI Server**: RESTful API with automatic documentation
+- **Iron Condor Screening**: Identifies high-probability opportunities
+- **Options Pricing**: Black-Scholes calculations with Greeks
+- **Backtesting Engine**: Historical strategy performance analysis
+- **Market Data**: Real-time S&P 500 stock and options data
 
-## Strategy Parameters
+## 🎯 Key API Endpoints
 
-### Default Configuration (Recommended)
+| Endpoint | Description |
+|----------|-------------|
+| `GET /daily-newspaper` | Main trading newspaper with all signals |
+| `GET /signals` | Current iron condor opportunities |
+| `GET /backtest-summary` | Historical performance data |
+| `GET /config` | Current strategy configuration |
+| `GET /health` | API health check |
+
+**API Documentation**: http://localhost:8000/docs
+
+## 📊 Iron Condor Strategy
+
+Iron condors are market-neutral options strategies that profit from:
+- **Low volatility** (stock stays in range)
+- **Time decay** (theta positive)
+- **Volatility contraction** (vega negative)
+
+### Strategy Parameters
 - **Days to Expiration**: 30 days (optimal time decay)
-- **Wing Width**: $5 (spread between long and short strikes)
-- **Body Width**: $10 (distance between put high and call low)
-- **IV Rank Minimum**: 70% (enter in high volatility)
-- **Target Profit**: 50% of max profit
-- **Max Loss**: 100% of max loss (full spread width)
-- **Max Trades/Month**: 4 (position sizing control)
+- **Wing Width**: $5 (risk management)
+- **Body Width**: $10 (profit zone)
+- **IV Rank Minimum**: 70% (high volatility entry)
+- **Target Profit**: 50% of maximum profit
 
-### Entry Criteria
-- **High IV Rank**: Enter when implied volatility rank ≥ 70%
-- **Liquid Options**: Minimum 1M daily volume, $20-$500 stock price
-- **Symmetric Positioning**: Strikes centered around current price
-- **Risk Management**: Maximum 2% portfolio risk per trade
+## 🎨 Flutter App Screens
 
-### Exit Criteria
-- **Profit Target**: Close at 50% of maximum profit
-- **Loss Limit**: Close at 100% of maximum loss
-- **Time Decay**: Close 7 days before expiration
-- **Early Management**: Monitor Greeks and adjust as needed
+1. **📰 Home (Newspaper)**: Daily market summary and top signals
+2. **📊 Signals**: Complete list of iron condor opportunities
+3. **📈 Backtest**: Historical performance analysis
 
-## Command Reference
+## ⚙️ Configuration
 
-### Basic Commands
-```bash
-# Show all available commands
-python main.py --help
-# or
-./iron_condor_tool.py --help
+Edit `backend/config/config.ini`:
 
-# Generate iron condor opportunities
-python main.py signals
-# or
-./iron_condor_tool.py signals
-
-# Run iron condor backtest
-python main.py backtest
-# or
-./iron_condor_tool.py backtest
-
-# Interactive mode
-python main.py interactive
-# or
-./iron_condor_tool.py interactive
-
-# View current configuration
-python main.py config
-# or
-./iron_condor_tool.py config
-```
-
-### Advanced Usage
-```bash
-# Backtest with custom settings
-python main.py backtest --start-year 2019 --target-profit 60 --wing-width 10
-
-# Custom number of stocks and parameters
-python main.py backtest --n-stocks 50 --min-iv-rank 80
-
-# All parameters can be configured in config.ini
-```
-
-### Configuration
-Edit `config.ini` to set your preferred defaults:
 ```ini
 [IRON_CONDOR_STRATEGY]
 days_to_expiration = 30
@@ -127,112 +144,84 @@ min_iv_rank = 70
 max_trades_per_month = 4
 ```
 
-## Available Analysis Tools
+## 🔧 Development
 
-The system includes comprehensive iron condor analysis capabilities:
-
-1. **IV Rank Analysis** - Performance correlation with implied volatility rank
-2. **Premium Efficiency Analysis** - How effectively premium is captured and retained
-3. **Strike Selection Analysis** - Performance by spread width and positioning
-4. **Time Decay Analysis** - Effectiveness of theta capture
-5. **Greeks Analysis** - Delta, gamma, theta, vega sensitivity analysis
-6. **Exit Strategy Analysis** - Performance by exit reason
-7. **Monte Carlo Simulation** - Risk assessment and probability analysis
-8. **Market Condition Analysis** - Performance across different volatility regimes
-
-## File Structure
-
-```
-iron_condor/
-├── main.py                    # Interactive command-line interface
-├── options.py                 # Options pricing and Greeks calculations
-├── screener.py               # Iron condor opportunity identification
-├── strategy.py               # Core iron condor trading logic
-├── backtest.py               # Options backtesting framework
-├── visualization.py          # Iron condor performance plotting
-└── analysis/                 # Advanced analysis modules
-    ├── iron_condor_analysis.py  # Iron condor specific metrics
-    ├── exit_analysis.py         # Exit strategy analysis
-    ├── market_analysis.py       # Market condition analysis
-    ├── monte_carlo.py          # Risk simulation
-    ├── sector_analysis.py      # Sector performance
-    ├── sensitivity.py          # Parameter optimization
-    └── timing_analysis.py      # Entry/exit timing
-
-iron_condor_tool.py            # Main command-line tool
-config.ini                     # Configuration file
-install.sh                     # Installation script
-```
-
-## Testing
-
-### Quick Validation
+### Backend Development
 ```bash
-python iron_condor_test.py
+cd backend/api
+python api_server.py  # Start with auto-reload
 ```
 
-### Legacy Testing
+### Frontend Development
 ```bash
-python legacy_test.py
+cd frontend
+flutter run  # Hot reload enabled
 ```
 
-This will test basic functionality and validate the installation.
-
-## Example Usage
-
-### Quick Start Examples
+### Testing
 ```bash
-# Get help
-python main.py --help
+# Test API endpoints
+cd backend
+python tests/test_api.py
 
-# Find current opportunities
-python main.py signals
-
-# Quick backtest (small sample)
-python main.py backtest --n-stocks 5 --start-year 2024
-
-# Conservative strategy (wider wings, lower targets)
-python main.py backtest --wing-width 10 --target-profit 25
-
-# Aggressive strategy (narrow wings, higher targets)
-python main.py backtest --wing-width 3 --target-profit 75 --min-iv-rank 80
-
-# Long-term backtest with many stocks
-python main.py backtest --n-stocks 50 --start-year 2020
-
-# View current configuration
-python main.py config
+# Test Flutter widgets
+cd frontend
+flutter test
 ```
 
-## Results Storage
+## 📚 Documentation
 
-All backtest results are automatically saved to `backtest_results/` folder:
-- **Full results**: `.pkl` files with complete trade data
-- **Summary**: `.csv` files with performance metrics
-- **Visualizations**: `.png` files with performance charts
+- **[API Documentation](docs/API_README.md)** - Complete API guide
+- **[Flutter App Guide](docs/FLUTTER_README.md)** - Mobile app documentation
+- **[Backend README](docs/README.md)** - Original backend documentation
 
+## 🛠️ Tech Stack
 
-**Remember: This is purely for demonstration of options trading strategies and backtesting libraries. Options trading involves significant risk and this code should not be used for actual trading decisions.**
+### Backend
+- **Python 3.8+**
+- **FastAPI** - Web framework
+- **pandas** - Data manipulation
+- **yfinance** - Market data
+- **scipy** - Options pricing
+- **matplotlib** - Visualization
 
-## Key Iron Condor Concepts
+### Frontend
+- **Flutter 3.0+**
+- **Dart 3.0+**
+- **Provider** - State management
+- **HTTP** - API communication
+- **JSON Serialization** - Type-safe models
 
-### What is an Iron Condor?
-An iron condor is a market-neutral options strategy that profits from:
-- **Low volatility** (stock price staying in a range)
-- **Time decay** (theta positive for the position)
-- **Volatility contraction** (vega negative, benefits from IV decrease)
+## ⚠️ Important Notes
 
-### Strategy Mechanics
-1. **Sell Put Spread**: Sell higher strike put, buy lower strike put
-2. **Sell Call Spread**: Sell lower strike call, buy higher strike call
-3. **Net Credit**: Receive premium upfront
-4. **Profit Zone**: Stock price between short strikes at expiration
-5. **Maximum Profit**: Net credit received (if stock stays in profit zone)
-6. **Maximum Loss**: Width of spreads minus net credit
+- **Educational Purpose**: This is for demonstration and learning only
+- **Paper Trading**: Not for actual trading decisions
+- **Market Hours**: Data freshness depends on market hours
+- **API Rate Limits**: Consider rate limiting for production use
 
-### Why This Strategy Works
-- **High Probability**: Most stocks trade in ranges 70-80% of the time
-- **Income Generation**: Consistent premium collection from time decay
-- **Defined Risk**: Known maximum profit and loss from entry
-- **Scalable**: Can be sized appropriately for any account size
-- **Market Neutral**: Profits in sideways markets where buy-and-hold fails
+## 🎉 Features Highlights
+
+- **📱 Cross-Platform**: iOS, Android, macOS, Windows, Web
+- **🔄 Real-Time**: Live market data and signal updates
+- **📊 Professional UI**: Trading-focused design
+- **🎯 Confidence Scoring**: AI-powered signal ranking
+- **📈 Historical Analysis**: Comprehensive backtesting
+- **🌐 RESTful API**: Clean, documented endpoints
+
+## 🚨 Troubleshooting
+
+### Backend Issues
+- Ensure Python 3.8+ is installed
+- Check that all dependencies are installed: `pip install -r backend/requirements.txt`
+- Verify config file exists: `backend/config/config.ini`
+
+### Frontend Issues
+- Ensure Flutter 3.0+ is installed: `flutter --version`
+- Run `flutter doctor` to check setup
+- Clear build cache: `flutter clean && flutter pub get`
+
+### API Connection Issues
+- Backend must be running on http://localhost:8000
+- For mobile testing, update API endpoint in `frontend/lib/services/api_service.dart`
+
+Your iron condor trading platform is now cleanly organized and ready for development! 🎯📈

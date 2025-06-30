@@ -1,3 +1,5 @@
 *.csv
 *.png
-*.pkl
+*.pklvenv/
+__pycache__/
+*.pyc
